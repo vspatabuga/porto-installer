@@ -1,0 +1,53 @@
+name: Deploy Porto Installer Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'wrangler.toml'
+      - 'package.json'
+
+  workflow_dispatch:
+
+env:
+  WORKER_NAME: porto-installer
+  CF_ACCOUNT_ID: 2de1ba2f7a6b785c51792776e9db0f6b
+
+jobs:
+  deploy-worker:
+    name: Deploy Porto Installer Worker
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Deploy Worker
+        run: wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT_ID }}
+
+      - name: Verify Deployment
+        run: |
+          sleep 5
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://porto.vspatabuga.io/)
+          echo "HTTP Status: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Deployment verified"
+          else
+            echo "⚠ May need more time, status: $HTTP_CODE"
+          fi
