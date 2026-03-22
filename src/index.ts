@@ -8,7 +8,7 @@ YELLOW='\\033[1;33m'
 RED='\\033[0;31m'
 NC='\\033[0m'
 
-echo -e "\\${BLUE}"
+echo -e "\${BLUE}"
 cat << "BANNER"
    ██████╗ ██████╗  █████╗ ███╗   ██╗██████╗  ██████╗ ███╗  
    ██╔══██╗██╔══██╗██╔══██╗████╗  ██║██╔══██╗██╔═══██╗████╗ 
@@ -16,50 +16,50 @@ cat << "BANNER"
    ██╔══██╗██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║██║╚█║
    ██████╔╝██║  ██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝██║ ╚█║
    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝ ╚═╝ ╚╝
-                                                             
+                                                              
    Porto - Portfolio Simulation Manager
 BANNER
-echo -e "\\${NC}"
+echo -e "\${NC}"
 
-echo -e "\\${YELLOW}>> Checking prerequisites...\\${NC}"
+echo -e "\${YELLOW}>> Checking prerequisites...\${NC}"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
-    echo -e "\\${RED}✗ Node.js not found.\\${NC}"
+    echo -e "\${RED}✗ Node.js not found.\${NC}"
     echo "  Install: https://nodejs.org/"
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
 if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "\\${RED}✗ Node.js 18+ required.\\${NC}"
+    echo -e "\${RED}✗ Node.js 18+ required.\${NC}"
     exit 1
 fi
-echo -e "\\${GREEN}✓\\${NC} Node.js $(node -v)"
+echo -e "\${GREEN}✓\${NC} Node.js $(node -v)"
 
 # Check Docker
 if ! command -v docker &> /dev/null; then
-    echo -e "\\${RED}✗ Docker not found\\${NC}"
+    echo -e "\${RED}✗ Docker not found\${NC}"
     echo "  Install: https://docs.docker.com/get-docker/"
     exit 1
 fi
-echo -e "\\${GREEN}✓\\${NC} Docker"
+echo -e "\${GREEN}✓\${NC} Docker"
 
-echo -e "\\${YELLOW}>> Installing @vspatabuga/porto...\\${NC}"
+echo -e "\${YELLOW}>> Installing @vspatabuga/porto...\${NC}"
 
 npm install -g @vspatabuga/porto --registry https://npm.pkg.github.com
 
 if [ $? -eq 0 ]; then
-    echo -e "\\n\\${GREEN}✓ Installation successful!\\${NC}"
+    echo -e "\n\${GREEN}✓ Installation successful!\${NC}"
     echo ""
     echo -e "Next steps:"
-    echo -e "  \\${BLUE}vsp-porto list\\${NC}              # See available simulations"
-    echo -e "  \\${BLUE}vsp-porto install ai-gov\\${NC}    # Install AI Governance"
-    echo -e "  \\${BLUE}vsp-porto start ai-gov\\${NC}      # Start simulation"
+    echo -e "  \${BLUE}vsp-porto list\${NC}              # See available simulations"
+    echo -e "  \${BLUE}vsp-porto install ai-gov\${NC}    # Install AI Governance"
+    echo -e "  \${BLUE}vsp-porto start ai-gov\${NC}      # Start simulation"
     echo ""
-    echo -e "Documentation: \\${BLUE}https://docs.vspatabuga.io/porto\\${NC}"
+    echo -e "Documentation: \${BLUE}https://docs.vspatabuga.io/porto\${NC}"
 else
-    echo -e "\\${RED}✗ Installation failed\\${NC}"
+    echo -e "\${RED}✗ Installation failed\${NC}"
     exit 1
 fi
 `;
@@ -67,12 +67,17 @@ fi
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const acceptHeader = request.headers.get("Accept") || "";
+    const userAgent = request.headers.get("User-Agent") || "";
     
-    if (url.pathname === "/install" || url.pathname === "/install.sh") {
+    const isCurl = userAgent.includes("curl") || userAgent.includes("libcurl");
+    const wantsScript = acceptHeader.includes("text/plain") || acceptHeader.includes("text/x-sh");
+    
+    if (isCurl || wantsScript) {
       return new Response(INSTALL_SCRIPT, {
         headers: {
-          "Content-Type": "application/x-sh",
-          "Content-Disposition": "attachment; filename=\"install.sh\"",
+          "Content-Type": "text/plain",
+          "Cache-Control": "no-store",
         },
       });
     }
@@ -92,7 +97,7 @@ export default {
   <p>Experience Sovereign Systems Locally</p>
   
   <h2>Quick Install</h2>
-  <pre>curl -fsSL https://porto.vspatabuga.io/install | sh</pre>
+  <pre>curl -fsSL https://porto.vspatabuga.io/ | sh</pre>
   
   <h2>Available Packages</h2>
   <ul>
