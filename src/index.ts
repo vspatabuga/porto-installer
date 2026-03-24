@@ -1,4 +1,57 @@
-const INSTALL_SCRIPT = `#!/usr/bin/env bash
+/**
+ * VSP Porto Installer - Cloudflare Worker
+ * Serves installation scripts for vsp-porto CLI and simulation packages
+ * 
+ * Endpoints:
+ * - / or /porto     → vsp-porto CLI installer
+ * - /kalpataru      → Kalpataru simulation installer
+ * - /ai-gov         → AI Governance simulation installer
+ * - /ledger         → Blockchain Ledger simulation installer
+ * - /iac            → Multi-Cloud IaC simulation installer
+ * - /zero-trust     → Zero-Trust Network simulation installer
+ */
+
+const PACKAGES = {
+  porto: {
+    name: "Porto CLI",
+    description: "Portfolio Simulation Manager",
+    githubRepo: "vspatabuga/vsp-porto-management",
+    npmPackage: "@vspatabuga/porto",
+  },
+  kalpataru: {
+    name: "Kalpataru",
+    description: "Waste Management & Circular Economy System",
+    githubRepo: "vspatabuga/kalpataru-backend-configuration",
+    npmPackage: "@vspatabuga/sim-kalpataru",
+  },
+  "ai-gov": {
+    name: "AI Governance",
+    description: "Private AI Orchestration Stack",
+    githubRepo: "vspatabuga/ai-governance-orchestrator",
+    npmPackage: "@vspatabuga/sim-ai-gov",
+  },
+  ledger: {
+    name: "Blockchain Ledger",
+    description: "Immutable Voting System",
+    githubRepo: "vspatabuga/evote-blockchain-dapps",
+    npmPackage: "@vspatabuga/sim-ledger",
+  },
+  iac: {
+    name: "Multi-Cloud IaC",
+    description: "Terraform Infrastructure Simulation",
+    githubRepo: "vspatabuga/sovereign-cloud-fabric",
+    npmPackage: "@vspatabuga/sim-iac",
+  },
+  "zero-trust": {
+    name: "Zero-Trust Network",
+    description: "Identity-Centric Security Architecture",
+    githubRepo: "vspatabuga/zero-trust-network",
+    npmPackage: "@vspatabuga/sim-zero-trust",
+  },
+};
+
+function getCLIInstallerScript(): string {
+  return `#!/usr/bin/env bash
 
 set -e
 
@@ -32,10 +85,17 @@ fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
 if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "\${RED}✗ Node.js 18+ required.\${NC}"
+    echo -e "\${RED}✗ Node.js 18+ required. Current: $(node -v)\${NC}"
     exit 1
 fi
 echo -e "\${GREEN}✓\${NC} Node.js $(node -v)"
+
+# Check npm
+if ! command -v npm &> /dev/null; then
+    echo -e "\${RED}✗ npm not found\${NC}"
+    exit 1
+fi
+echo -e "\${GREEN}✓\${NC} npm $(npm -v)"
 
 # Check Docker
 if ! command -v docker &> /dev/null; then
@@ -43,76 +103,392 @@ if ! command -v docker &> /dev/null; then
     echo "  Install: https://docs.docker.com/get-docker/"
     exit 1
 fi
+
+if ! docker info &> /dev/null; then
+    echo -e "\${YELLOW}⚠ Docker is installed but not running.\${NC}"
+    echo "  Please start Docker before using vsp-porto."
+fi
 echo -e "\${GREEN}✓\${NC} Docker"
+
+# Check GitHub CLI (optional)
+if command -v gh &> /dev/null; then
+    echo -e "\${GREEN}✓\${NC} GitHub CLI (gh)"
+fi
 
 echo -e "\${YELLOW}>> Installing @vspatabuga/porto...\${NC}"
 
-npm install -g @vspatabuga/porto --registry https://npm.pkg.github.com
+# Create temporary directory
+INSTALL_DIR=$(mktemp -d)
+cd "\$INSTALL_DIR"
+
+# Download package tarball from GitHub Packages
+echo "Downloading package..."
+if ! npm pack @vspatabuga/porto --registry https://npm.pkg.github.com 2>/dev/null; then
+    echo -e "\${RED}✗ Failed to download package\${NC}"
+    exit 1
+fi
+TARBALL=$(ls vspatabuga-porto-*.tgz 2>/dev/null | head -1)
+if [ -z "\$TARBALL" ]; then
+    echo -e "\${RED}✗ Failed to download package\${NC}"
+    exit 1
+fi
+
+# Extract package
+tar -xzf "\$TARBALL"
+rm "\$TARBALL"
+
+# Install dependencies from npmjs.org
+# Create local .npmrc to override global settings
+echo "Installing dependencies..."
+cd package
+cat > .npmrc << 'EOF'
+registry=https://registry.npmjs.org/
+EOF
+npm install > /dev/null 2>&1 || {
+    echo -e "\${RED}✗ Failed to install dependencies\${NC}"
+    exit 1
+}
+
+# Link to global node_modules
+npm link
+
+cd /tmp
+rm -rf "\$INSTALL_DIR"
+
+if command -v vsp-porto &> /dev/null; then
+    echo -e "\n\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
+    echo -e "\${GREEN}✓\${NC} Installation successful!"
+    echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
+    echo ""
+    echo -e "\${YELLOW}Available Commands:\${NC}"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto list\${NC}"
+    echo -e "      → See all available simulation packages"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto install kalpataru\${NC}"
+    echo -e "      → Install Waste Management simulation"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto install ai-gov\${NC}"
+    echo -e "      → Install AI Governance simulation"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto install ledger\${NC}"
+    echo -e "      → Install Blockchain Ledger simulation"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto install iac\${NC}"
+    echo -e "      → Install Multi-Cloud IaC simulation"
+    echo ""
+    echo -e "  \${BLUE}vsp-porto install zero-trust\${NC}"
+    echo -e "      → Install Zero-Trust Network simulation"
+    echo ""
+    echo -e "\${YELLOW}Quick Start:\${NC}"
+    echo -e "  1. vsp-porto list"
+    echo -e "  2. vsp-porto install <package>"
+    echo -e "  3. vsp-porto start <package>"
+    echo ""
+    echo -e "Documentation: \${BLUE}https://github.com/vspatabuga/vsp-porto-management\${NC}"
+    echo -e "Portfolio:      \${BLUE}https://vspatabuga.io\${NC}"
+else
+    echo -e "\${RED}✗ Installation failed\${NC}"
+    echo ""
+    echo -e "\${YELLOW}Troubleshooting:\${NC}"
+    echo -e "  1. Make sure Docker is running"
+    echo -e "  2. Check Node.js version (18+ required)"
+    exit 1
+fi
+`;
+}
+
+function getSimulationInstallerScript(pkg: typeof PACKAGES[keyof typeof PACKAGES], slug: string): string {
+  return `#!/usr/bin/env bash
+
+# ============================================
+# VSP Porto - Simulation Installer
+# Package: ${pkg.name}
+# ============================================
+
+set -e
+
+BLUE='\\033[0;34m'
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+RED='\\033[0;31m'
+CYAN='\\033[0;36m'
+NC='\\033[0m'
+
+echo -e "\${BLUE}"
+cat << "BANNER"
+   ██████╗ ██████╗  █████╗ ███╗   ██╗██████╗  ██████╗ ███╗  
+   ██╔══██╗██╔══██╗██╔══██╗████╗  ██║██╔══██╗██╔═══██╗████╗ 
+   ██████╔╝██████╔╝███████║██╔██╗ ██║██║  ██║██║   ██║██╔██╗
+   ██╔══██╗██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║██║╚█║
+   ██████╔╝██║  ██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝██║ ╚█║
+   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝ ╚═╝ ╚╝
+                                                              
+   Simulation Installer
+BANNER
+echo -e "\${NC}"
+
+echo -e "\${CYAN}Package: ${pkg.name}\${NC}"
+echo -e "\${CYAN}Description: ${pkg.description}\${NC}"
+echo -e ""
+
+# Check prerequisites
+echo -e "\${YELLOW}>> Checking prerequisites...\${NC}"
+
+# Check Docker
+if ! command -v docker &> /dev/null; then
+    echo -e "\${RED}✗ Docker not found\${NC}"
+    echo "  Install: https://docs.docker.com/get-docker/"
+    exit 1
+fi
+
+if ! docker info &> /dev/null; then
+    echo -e "\${YELLOW}⚠ Docker is installed but not running.\${NC}"
+    echo "  Please start Docker first."
+    exit 1
+fi
+echo -e "\${GREEN}✓\${NC} Docker"
+
+# Install vsp-porto if not installed
+if ! command -v vsp-porto &> /dev/null; then
+    echo -e "\${YELLOW}>> Installing vsp-porto CLI...\${NC}"
+    npm install -g @vspatabuga/porto --registry https://npm.pkg.github.com
+    echo -e "\${GREEN}✓\${NC} vsp-porto installed"
+fi
+
+echo -e "\${YELLOW}>> Installing ${pkg.name}...\${NC}"
+
+# Use vsp-porto to install
+vsp-porto install ${slug}
 
 if [ $? -eq 0 ]; then
-    echo -e "\n\${GREEN}✓ Installation successful!\${NC}"
+    echo -e "\n\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
+    echo -e "\${GREEN}✓\${NC} ${pkg.name} installed successfully!"
+    echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
     echo ""
-    echo -e "Next steps:"
-    echo -e "  \${BLUE}vsp-porto list\${NC}              # See available simulations"
-    echo -e "  \${BLUE}vsp-porto install ai-gov\${NC}    # Install AI Governance"
-    echo -e "  \${BLUE}vsp-porto start ai-gov\${NC}      # Start simulation"
+    echo -e "\${YELLOW}Next Steps:\${NC}"
     echo ""
-    echo -e "Documentation: \${BLUE}https://docs.vspatabuga.io/porto\${NC}"
+    echo -e "  1. Start the simulation:"
+    echo -e "     \${BLUE}vsp-porto start ${slug}\${NC}"
+    echo ""
+    echo -e "  2. Open browser:"
+    echo -e "     \${BLUE}vsp-porto open ${slug}\${NC}"
+    echo ""
+    echo -e "  3. View logs:"
+    echo -e "     \${BLUE}vsp-porto logs ${slug}\${NC}"
+    echo ""
+    echo -e "  4. Stop simulation:"
+    echo -e "     \${BLUE}vsp-porto stop ${slug}\${NC}"
+    echo ""
+    echo -e "\${YELLOW}Documentation:\${NC}"
+    echo -e "  \${BLUE}https://github.com/${pkg.githubRepo}\${NC}"
 else
     echo -e "\${RED}✗ Installation failed\${NC}"
     exit 1
 fi
 `;
+}
+
+function getHTMLPage(path: string): string {
+  const packageList = Object.entries(PACKAGES)
+    .filter(([slug]) => slug !== "porto")
+    .map(
+      ([slug, pkg]) => `
+    <li>
+      <strong>${pkg.name}</strong> - ${pkg.description}<br>
+      <code>curl -fsSL https://porto.vspatabuga.io/${slug} | sh</code>
+    </li>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VSP Porto - Portfolio Simulation Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 60px 20px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+    }
+    .logo p {
+      color: rgba(255,255,255,0.6);
+      font-size: 16px;
+    }
+    .install-box {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 40px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .install-box h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #00d4aa;
+    }
+    .command {
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      border: 1px solid #30363d;
+    }
+    .packages {
+      background: rgba(255,255,255,0.03);
+      border-radius: 16px;
+      padding: 30px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .packages h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+    .packages ul {
+      list-style: none;
+    }
+    .packages li {
+      padding: 20px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .packages li:last-child { margin-bottom: 0; }
+    .packages code {
+      display: block;
+      margin-top: 10px;
+      background: #0d1117;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #00d4aa;
+      border: 1px solid #30363d;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      color: rgba(255,255,255,0.4);
+      font-size: 14px;
+    }
+    .footer a {
+      color: #00d4aa;
+      text-decoration: none;
+    }
+    .badge {
+      display: inline-block;
+      background: #238636;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>VSP PORTO</h1>
+      <p>Portfolio Simulation Manager - Experience Sovereign Systems Locally</p>
+    </div>
+
+    <div class="install-box">
+      <h2>Quick Install <span class="badge">Recommended</span></h2>
+      <div class="command">curl -fsSL https://porto.vspatabuga.io/ | sh</div>
+      <p style="margin-top: 16px; color: rgba(255,255,255,0.6); font-size: 14px;">
+        Requires: Node.js 18+, npm, Docker
+      </p>
+    </div>
+
+    <div class="packages">
+      <h2>Available Simulations</h2>
+      <ul>
+        ${packageList}
+      </ul>
+    </div>
+
+    <div class="footer">
+      <p>
+        <a href="https://github.com/vspatabuga/vsp-porto-management">Documentation</a> ·
+        <a href="https://vspatabuga.io">Portfolio</a> ·
+        <a href="https://github.com/vspatabuga">GitHub</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
 
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const pathname = url.pathname.replace(/^\//, "").split("/")[0] || "";
     const acceptHeader = request.headers.get("Accept") || "";
     const userAgent = request.headers.get("User-Agent") || "";
-    
+
     const isCurl = userAgent.includes("curl") || userAgent.includes("libcurl");
-    const wantsScript = acceptHeader.includes("text/plain") || acceptHeader.includes("text/x-sh");
-    
+    const wantsScript =
+      acceptHeader.includes("text/plain") || acceptHeader.includes("text/x-sh");
+
+    // Route mapping
+    const slugMap: Record<string, string> = {
+      "": "porto",
+      porto: "porto",
+      kalpataru: "kalpataru",
+      "ai-gov": "ai-gov",
+      ledger: "ledger",
+      iac: "iac",
+      "zero-trust": "zero-trust",
+    };
+
+    const slug = slugMap[pathname] || "porto";
+    const pkg = PACKAGES[slug as keyof typeof PACKAGES];
+
     if (isCurl || wantsScript) {
-      return new Response(INSTALL_SCRIPT, {
+      // Return bash script for curl requests
+      const script =
+        slug === "porto"
+          ? getCLIInstallerScript()
+          : getSimulationInstallerScript(pkg, slug);
+
+      return new Response(script, {
         headers: {
           "Content-Type": "text/plain",
           "Cache-Control": "no-store",
+          "X-Package": pkg.npmPackage,
+          "X-GitHub-Repo": pkg.githubRepo,
         },
       });
     }
 
-    return new Response(`<!DOCTYPE html>
-<html>
-<head>
-  <title>VSP Porto - Portfolio Simulation Manager</title>
-  <style>
-    body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
-    pre { background: #f4f4f4; padding: 20px; border-radius: 8px; overflow-x: auto; }
-    .success { color: #00B894; }
-  </style>
-</head>
-<body>
-  <h1>🛠️ VSP Porto Installer</h1>
-  <p>Experience Sovereign Systems Locally</p>
-  
-  <h2>Quick Install</h2>
-  <pre>curl -fsSL https://porto.vspatabuga.io/ | sh</pre>
-  
-  <h2>Available Packages</h2>
-  <ul>
-    <li><strong>ai-gov</strong> - AI Governance Stack</li>
-    <li><strong>kalpataru</strong> - Waste Management</li>
-    <li><strong>ledger</strong> - Blockchain Voting</li>
-    <li><strong>iac</strong> - Multi-Cloud IaC</li>
-    <li><strong>zero-trust</strong> - Zero-Trust Network</li>
-  </ul>
-  
-  <h2>Documentation</h2>
-  <p><a href="https://github.com/vspatabuga/vsp-porto-management">GitHub Repository</a></p>
-</body>
-</html>`, {
-      headers: { "Content-Type": "text/html" },
+    // Return HTML for browser requests
+    return new Response(getHTMLPage(pathname), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   },
 };
