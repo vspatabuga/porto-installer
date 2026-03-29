@@ -59,25 +59,30 @@ BLUE='\\033[0;34m'
 GREEN='\\033[0;32m'
 YELLOW='\\033[1;33m'
 RED='\\033[0;31m'
+CYAN='\\033[0;36m'
 NC='\\033[0m'
 
-echo -e "\${BLUE}"
+echo -e "\${CYAN}"
 cat << "BANNER"
-   ██████╗ ██████╗  █████╗ ███╗   ██╗██████╗  ██████╗ ███╗  
-   ██╔══██╗██╔══██╗██╔══██╗████╗  ██║██╔══██╗██╔═══██╗████╗ 
-   ██████╔╝██████╔╝███████║██╔██╗ ██║██║  ██║██║   ██║██╔██╗
-   ██╔══██╗██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║██║╚█║
-   ██████╔╝██║  ██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝██║ ╚█║
-   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝ ╚═╝ ╚╝
-                                                              
-   Porto - Portfolio Simulation Manager
+/$$    /$$  /$$$$$$        /$$$$$$$   /$$$$$$  /$$$$$$$$ /$$$$$$  /$$$$$$$  /$$   /$$  /$$$$$$   /$$$$$$ 
+| $$   | $$ /$$__  $$      | $$__  $$ /$$__  $$|__  $$__//$$__  $$| $$__  $$| $$  | $$ /$$__  $$ /$$__  $$
+| $$   | $$| $$  \__/      | $$  \ $$| $$  \ $$   | $$  | $$  \ $$| $$  \ $$| $$  | $$| $$  \__/| $$  \ $$
+|  $$ / $$/|  $$$$$$       | $$$$$$$/| $$$$$$$$   | $$  | $$$$$$$$| $$$$$$$ | $$  | $$| $$ /$$$$| $$$$$$$$
+ \  $$ $$/  \____  $$      | $$____/ | $$__  $$   | $$  | $$__  $$| $$__  $$| $$  | $$| $$|_  $$| $$__  $$
+  \  $$$/   /$$  \ $$      | $$      | $$  | $$   | $$  | $$  | $$| $$  \ $$| $$  | $$| $$  \ $$| $$  | $$
+   \  $/   |  $$$$$$/      | $$      | $$  | $$   | $$  | $$  | $$| $$$$$$$/|  $$$$$$/|  $$$$$$/| $$  | $$
+    \_/     \______/       |__/      |__/  |__/   |__/  |__/  |__/|_______/  \______/  \______/ |__/  |__/
 BANNER
 echo -e "\${NC}"
+
+echo -e "\${YELLOW}VSP Porto Management System\${NC}"
+echo ""
 
 echo -e "\${YELLOW}>> Checking prerequisites...\${NC}"
 
 # Check Node.js
-if ! command -v node &> /dev/null; then
+NODE_PATH=$(which node 2>/dev/null || echo "")
+if [ -z "$NODE_PATH" ]; then
     echo -e "\${RED}✗ Node.js not found.\${NC}"
     echo "  Install: https://nodejs.org/"
     exit 1
@@ -91,14 +96,16 @@ fi
 echo -e "\${GREEN}✓\${NC} Node.js $(node -v)"
 
 # Check npm
-if ! command -v npm &> /dev/null; then
+NPM_PATH=$(which npm 2>/dev/null || echo "")
+if [ -z "$NPM_PATH" ]; then
     echo -e "\${RED}✗ npm not found\${NC}"
     exit 1
 fi
 echo -e "\${GREEN}✓\${NC} npm $(npm -v)"
 
 # Check Docker
-if ! command -v docker &> /dev/null; then
+DOCKER_PATH=$(which docker 2>/dev/null || echo "")
+if [ -z "$DOCKER_PATH" ]; then
     echo -e "\${RED}✗ Docker not found\${NC}"
     echo "  Install: https://docs.docker.com/get-docker/"
     exit 1
@@ -111,7 +118,8 @@ fi
 echo -e "\${GREEN}✓\${NC} Docker"
 
 # Check GitHub CLI (optional)
-if command -v gh &> /dev/null; then
+GH_PATH=$(which gh 2>/dev/null || echo "")
+if [ -n "$GH_PATH" ]; then
     echo -e "\${GREEN}✓\${NC} GitHub CLI (gh)"
 fi
 
@@ -137,25 +145,47 @@ fi
 tar -xzf "\$TARBALL"
 rm "\$TARBALL"
 
-# Install dependencies from npmjs.org
-# Create local .npmrc to override global settings
-echo "Installing dependencies..."
-cd package
-cat > .npmrc << 'EOF'
+  # Create user-local installation directory
+  echo "Setting up user-local installation..."
+  PORTO_HOME="$HOME/.local/share/vsp-porto"
+  PORTO_BIN="$HOME/.local/bin"
+  
+  mkdir -p "\$PORTO_HOME"
+  mkdir -p "\$PORTO_BIN"
+  
+  # Move package to installation directory
+  mv package "\$PORTO_HOME/app"
+  
+  # Install dependencies from npmjs.org with user-local settings
+  echo "Installing dependencies..."
+  cd "\$PORTO_HOME/app"
+  cat > .npmrc << 'EOF'
 registry=https://registry.npmjs.org/
 EOF
-npm install > /dev/null 2>&1 || {
-    echo -e "\${RED}✗ Failed to install dependencies\${NC}"
-    exit 1
-}
+  npm install --prefix "\$PORTO_HOME/app" > /dev/null 2>&1 || {
+      echo -e "\${RED}✗ Failed to install dependencies\${NC}"
+      exit 1
+  }
 
-# Link to global node_modules
-npm link
+  # Create wrapper script in user bin
+  cat > "\$PORTO_BIN/vsp-porto" << 'WRAPPER'
+#!/usr/bin/env bash
+PORTO_HOME="$HOME/.local/share/vsp-porto"
+exec node "\$PORTO_HOME/app/dist/cli.cjs" "\$@"
+WRAPPER
+  chmod +x "\$PORTO_BIN/vsp-porto"
 
-cd /tmp
-rm -rf "\$INSTALL_DIR"
+  # Add to PATH if not already there
+  if [[ ":\$PATH:" != *":\$HOME/.local/bin:"* ]]; then
+      echo "" >> "$HOME/.bashrc" 2>/dev/null || true
+      echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc" 2>/dev/null || true
+      export PATH="\$HOME/.local/bin:\$PATH"
+  fi
 
-if command -v vsp-porto &> /dev/null; then
+  cd /tmp
+  rm -rf "\$INSTALL_DIR"
+
+  if [ -f "\$PORTO_BIN/vsp-porto" ]; then
     echo -e "\n\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
     echo -e "\${GREEN}✓\${NC} Installation successful!"
     echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
@@ -215,21 +245,24 @@ RED='\\033[0;31m'
 CYAN='\\033[0;36m'
 NC='\\033[0m'
 
-echo -e "\${BLUE}"
+echo -e "\${CYAN}"
 cat << "BANNER"
-   ██████╗ ██████╗  █████╗ ███╗   ██╗██████╗  ██████╗ ███╗  
-   ██╔══██╗██╔══██╗██╔══██╗████╗  ██║██╔══██╗██╔═══██╗████╗ 
-   ██████╔╝██████╔╝███████║██╔██╗ ██║██║  ██║██║   ██║██╔██╗
-   ██╔══██╗██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║██║╚█║
-   ██████╔╝██║  ██║██║  ██║██║ ╚████║██████╔╝╚██████╔╝██║ ╚█║
-   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝ ╚═╝ ╚╝
-                                                              
-   Simulation Installer
+/$$    /$$  /$$$$$$        /$$$$$$$   /$$$$$$  /$$$$$$$$ /$$$$$$  /$$$$$$$  /$$   /$$  /$$$$$$   /$$$$$$ 
+| $$   | $$ /$$__  $$      | $$__  $$ /$$__  $$|__  $$__//$$__  $$| $$__  $$| $$  | $$ /$$__  $$ /$$__  $$
+| $$   | $$| $$  \__/      | $$  \ $$| $$  \ $$   | $$  | $$  \ $$| $$  \ $$| $$  | $$| $$  \__/| $$  \ $$
+|  $$ / $$/|  $$$$$$       | $$$$$$$/| $$$$$$$$   | $$  | $$$$$$$$| $$$$$$$ | $$  | $$| $$ /$$$$| $$$$$$$$
+ \  $$ $$/  \____  $$      | $$____/ | $$__  $$   | $$  | $$__  $$| $$__  $$| $$  | $$| $$|_  $$| $$__  $$
+  \  $$$/   /$$  \ $$      | $$      | $$  | $$   | $$  | $$  | $$| $$  \ $$| $$  | $$| $$  \ $$| $$  | $$
+   \  $/   |  $$$$$$/      | $$      | $$  | $$   | $$  | $$  | $$| $$$$$$$/|  $$$$$$/|  $$$$$$/| $$  | $$
+    \_/     \______/       |__/      |__/  |__/   |__/  |__/  |__/|_______/  \______/  \______/ |__/  |__/
 BANNER
 echo -e "\${NC}"
 
-echo -e "\${CYAN}Package: ${pkg.name}\${NC}"
-echo -e "\${CYAN}Description: ${pkg.description}\${NC}"
+echo -e "\${YELLOW}VSP Porto Management System\${NC}"
+echo ""
+
+echo -e "\${CYAN}Package: \${pkg.name}\${NC}"
+echo -e "\${CYAN}Description: \${pkg.description}\${NC}"
 echo -e ""
 
 # Check prerequisites
@@ -306,7 +339,7 @@ function getHTMLPage(path: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VSP Porto - Portfolio Simulation Manager</title>
+  <title>VS PATABUGA - VSP Porto</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -326,14 +359,22 @@ function getHTMLPage(path: string): string {
       margin-bottom: 40px;
     }
     .logo h1 {
-      font-size: 48px;
+      font-size: 36px;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.15em;
       margin-bottom: 10px;
+      color: #00d4aa;
+    }
+    .logo .subtitle {
+      color: rgba(255,255,255,0.6);
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
     }
     .logo p {
-      color: rgba(255,255,255,0.6);
+      color: rgba(255,255,255,0.8);
       font-size: 16px;
+      margin-top: 16px;
     }
     .install-box {
       background: rgba(255,255,255,0.05);
@@ -413,8 +454,9 @@ function getHTMLPage(path: string): string {
 <body>
   <div class="container">
     <div class="logo">
-      <h1>VSP PORTO</h1>
-      <p>Portfolio Simulation Manager - Experience Sovereign Systems Locally</p>
+      <h1>VS PATABUGA</h1>
+      <p class="subtitle">VSP Porto Management System</p>
+      <p>Experience Sovereign Systems Locally</p>
     </div>
 
     <div class="install-box">
