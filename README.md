@@ -1,16 +1,31 @@
-# Porto Installer
+# Portfolio Deployment Engine
 
-Cloudflare Worker for VSP Porto installation service.
+## Overview
+Cloudflare Worker + backend service yang menyediakan endpoint distribusi installer `vsp-porto` dan memetakan pipeline deployment prototype VSP. Repositori ini hanya menyimpan data plane (worker script + config). Arsitektur lengkap tersedia di [pes-docs](https://github.com/vspatabuga/pes-docs).
 
-## Setup
+## Stack
+- **Runtime**: Cloudflare Workers (JavaScript/TypeScript via Wrangler).
+- **Build**: `npm run build` menghasilkan bundle worker, `wrangler publish` untuk deploy.
 
+## Getting Started
 ```bash
+git clone git@github.com:vspatabuga/portfolio-deployment-engine.git
+cd portfolio-deployment-engine
 npm install
-npm run dev  # Local development
-npm run deploy  # Deploy to Cloudflare
+npm run dev
+
+# deploy to Cloudflare (requires secrets)
+npm run deploy
 ```
 
-## Endpoints
+## API
+- `GET /install`: unduh installer shell script.
+- `GET /`: landing page dan status worker.
 
-- `GET /install` - Download install script
-- `GET /` - Landing page
+## Security & Maintenance
+- Secrets (`CF_API_TOKEN`, `ACCOUNT_ID`, dsb.) dijaga di Vault dan tidak di-commit.
+- Dependabot memantau `package-lock.json` mingguan.
+- Laporkan kerentanan melalui GitHub Issue berlabel `security` atau email `sc@vspatabuga.io`.
+
+## License
+Apache License 2.0 © 2026 Virgiawan Sagarmata Patabuga.
